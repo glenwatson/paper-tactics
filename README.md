@@ -22,7 +22,7 @@ A lambda instantiates adapters, parses requests, and invokes a use case.
 ## Development
 
 `app.py` is an application for local testing.
-It requires `bidict`, `websockets` and `nest-asyncio` from PyPI.
+It requires `bidict`, `websockets`, `heapq`, and `nest-asyncio` from PyPI.
 The [frontend](https://www.paper-tactics.com) can connect to your locally run server
 by selecting _Localhost_ from the server drop-down.
 
