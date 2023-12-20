@@ -14,3 +14,49 @@ class GameView:
     opponent: PlayerView
     trenches: frozenset[Cell]
     preferences: GamePreferences
+
+    def __str__(self) -> str:
+        return self._str_wide()
+
+    def _str_wide(self) -> str:
+        ret = ''
+        board_size = self.preferences.size
+        for y in range(board_size):
+            for x in range(board_size):
+                ret += "+-"
+            ret += "+\n"
+            for x in range(board_size):
+                current_cell = (x+1, y+1)
+                ret += "|" + self._get_char(current_cell)
+            ret += "|\n"
+        for x in range(board_size):
+            ret += "+-"
+        ret += "+\n"
+        return ret
+
+    def _str_compact(self) -> str:
+        ret = ''
+        board_size = self.preferences.size
+        for y in range(board_size):
+            ret += "\n"
+            for x in range(board_size):
+                current_cell = (x+1, y+1)
+                ret += self._get_char(current_cell)
+            ret += "\n"
+        ret += "\n"
+        return ret
+
+    def _get_char(self, cell: Cell) -> str:
+        if cell in self.me.units:
+            return "X"
+        elif cell in self.me.walls:
+            return "#"
+        elif cell in self.opponent.units:
+            return "0"
+        elif cell in self.opponent.walls:
+            return "8"
+        elif cell in self.trenches:
+            # is unclaimed trench
+            return "@"
+        else:
+            return " "
