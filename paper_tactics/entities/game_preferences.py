@@ -4,7 +4,7 @@ from typing import Iterable
 from paper_tactics.entities.cell import Cell
 
 
-@dataclass(frozen=True)
+@dataclass#(frozen=True)  # here's the hack
 class GamePreferences:
     size: int = 10
     turn_count: int = 3
@@ -13,6 +13,9 @@ class GamePreferences:
     trench_density_percent: int = 0
     is_double_base: bool = False
     code: str = ""
+
+    def hack_set_is_not_against_bot(self):
+        self.is_against_bot = False
 
     @property
     def valid(self) -> bool:

@@ -3,7 +3,6 @@ from random import randint
 from typing import Final, Iterable, cast
 
 from paper_tactics.entities.cell import Cell
-from paper_tactics.entities.game_bot import GameBot
 from paper_tactics.entities.game_preferences import GamePreferences
 from paper_tactics.entities.game_view import GameView
 from paper_tactics.entities.player import Player
@@ -86,18 +85,22 @@ class Game:
         self.turns_left -= 1
         if not self.turns_left:
             self.turns_left = self.preferences.turn_count
+            self.active_player, self.passive_player = (
+                self.passive_player,
+                self.active_player,
+            )
             if self.preferences.is_against_bot:
+                from paper_tactics.entities.game_bot import GameBot  # hack to avoid circular imports
                 game_bot = GameBot()
-                for _ in range(self.preferences.turn_count):
-                    if not self.passive_player.reachable:
-                        self.passive_player.is_defeated = True
+                while self.turns_left:
+                    if not self.active_player.reachable:
+                        self.active_player.is_defeated = True
                         break
-                    cell = game_bot.make_turn(self.get_view(self.passive_player.id))
-                    assert cell in self.passive_player.reachable
-                    self._make_turn(cell, self.passive_player, self.active_player)
+                    cell = game_bot.make_turn(self)
+                    assert cell in self.active_player.reachable
+                    self._make_turn(cell, self.active_player, self.passive_player)
                     self.turns_left -= 1
                 self.turns_left = self.preferences.turn_count
-            else:
                 self.active_player, self.passive_player = (
                     self.passive_player,
                     self.active_player,
