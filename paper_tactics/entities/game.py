@@ -96,10 +96,11 @@ class Game:
                     if not self.active_player.reachable:
                         self.active_player.is_defeated = True
                         break
-                    cell = game_bot.make_turn(self)
-                    assert cell in self.active_player.reachable
-                    self._make_turn(cell, self.active_player, self.passive_player)
-                    self.turns_left -= 1
+                    cells = game_bot.make_turn(self)
+                    for cell in cells:
+                        assert cell in self.active_player.reachable, str(cell) + ' is not reachable'
+                        self._make_turn(cell, self.active_player, self.passive_player)
+                        self.turns_left -= 1
                 self.turns_left = self.preferences.turn_count
                 self.active_player, self.passive_player = (
                     self.passive_player,

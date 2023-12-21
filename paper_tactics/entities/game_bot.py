@@ -24,16 +24,16 @@ class GameBot:
     horizontal_weight: float = 1
     discoverable_weight: float = 1
 
-    def make_turn(self, game: Game) -> Cell:
+    def make_turn(self, game: Game) -> [Cell]:
         # print(game)
         # print()
         # for c in self.a_star_algorithm(game, [(game.preferences.size, game.preferences.size)], (2, 1)):
         #     print(c)
-        return self.negamax_move(game)
+        return self.negamax_move(game)[:game.turns_left]
 
     def _weighted_move(self, game: Game):
         weights = [self._get_weight(cell, game) for cell in game.active_player.reachable]
-        return choices(list(game.active_player.reachable), weights)[0]
+        return [choices(list(game.active_player.reachable), weights)[0]]
 
     def _get_weight(self, cell: Cell, game: Game) -> float:
         if cell in game.passive_player.units:
@@ -77,7 +77,10 @@ class GameBot:
         )
         return (discoverable_count + 1) * self.discoverable_weight
 
-    def negamax_move(self, game: Game) -> Cell:
+    def negamax_move(self, game: Game) -> [Cell]:
+        # store this many number of turns
+        turns_to_make = game.turns_left
+        moves_to_make = []
         possible_moves = game.active_player.reachable
         best_moves = []
         best_score = float('-inf')
@@ -85,55 +88,82 @@ class GameBot:
             simulated_game = copy.deepcopy(game)
             simulated_game.preferences.hack_set_is_not_against_bot()
             simulated_game.make_turn(simulated_game.active_player.id, cell)
-            score = self.negamax(simulated_game, 3, float('-inf'), float('inf'), False)
+            score, moves = self.negamax(simulated_game, 3, float('-inf'), float('inf'), False)
             if score > best_score:
                 best_score = score
-                best_moves = [cell]
+                best_moves = [[cell] + moves]
             elif score == best_score:
-                best_moves.append(cell)
+                best_moves.append([cell] + moves)
         print('found best moves ' + str(best_moves) + ' with score of ' + str(best_score))
         return random.choice(best_moves)
 
-    def negamax(self, game: Game, depth: int, alpha: float, beta: float, turn: bool) -> float:
+    def negamax(self, game: Game, depth: int, alpha: float, beta: float, turn: bool) -> tuple[float, [Cell]]:
         if depth == 0 or game.active_player.is_defeated or game.passive_player.is_defeated:
-            return self.evaluate_game_for_active_player(game) * 1 if turn else -1
+            return self.evaluate_game_for_active_player(game), []
         possible_moves = game.active_player.reachable
         # possible_moves = sort(possible_moves)
         value = float('-inf')
+        value_move = []
         for cell in possible_moves:
             simulated_game = copy.deepcopy(game)
             simulated_game.preferences.hack_set_is_not_against_bot()
             simulated_game.make_turn(simulated_game.active_player.id, cell)
-            value = max(value, -self.negamax(simulated_game, depth-1, -beta, -alpha, not turn))
+            # turns were just reset after .make_turn()
+            should_change_turn = simulated_game.turns_left == simulated_game.preferences.turn_count
+            recursion_modifier = -1 if should_change_turn else 1
+            simulated_game_value_move = self.negamax(
+                simulated_game,
+                depth - 1,
+                beta * recursion_modifier,
+                alpha * recursion_modifier,
+                not turn if should_change_turn else turn)
+            simulated_game_value = simulated_game_value_move[0] * recursion_modifier
+            if value < simulated_game_value:
+                value = simulated_game_value
+                value_move = [cell] + simulated_game_value_move[1]
             alpha = max(alpha, value)
             if alpha >= beta:
                 break
-        return value
+        return value, value_move
 
     @staticmethod
     def evaluate_game_for_active_player(game: Game) -> float:
+        if game.active_player.is_defeated:
+            return float('-inf')
+        if game.passive_player.is_defeated:
+            return float('inf')
         points = 0
         points += len(game.active_player.reachable)
         points -= len(game.passive_player.reachable)
         points += len(game.active_player.units)
         points -= len(game.passive_player.units)
-        points += 4 * len(game.active_player.walls)
-        points -= 4 * len(game.passive_player.walls)
+        points += 6 * len(game.active_player.walls)
+        points -= 6 * len(game.passive_player.walls)
+        active_units_touching_wall_count = GameBot.count_of_units_touching_wall(game, game.active_player)
+        points += 1000 if active_units_touching_wall_count > 0 else 0
+        points += 10 * active_units_touching_wall_count
+        passive_units_touching_wall_count = GameBot.count_of_units_touching_wall(game, game.passive_player)
+        points -= 1000 if passive_units_touching_wall_count > 0 else 0
+        points -= 10 * active_units_touching_wall_count
         # todo
-        #  if you can remove opponents units from adjacent walls, +10
         #  if you can run far away enough to not allow your opponent to remove units from adjacent walls, +10
         #  length of wall, +2 * length
         return points
 
-    def count_of_units_touching_wall(self, game: Game, player: Player) -> int:
+    @staticmethod
+    def count_of_units_touching_wall(game: Game, player: Player) -> int:
+        return len(GameBot.get_units_touching_wall(game, player))
+
+    @staticmethod
+    def get_units_touching_wall(game: Game, player: Player) -> set[Cell]:
         if len(player.walls) > len(player.units):  # optimization
             cells = player.walls
             adjacents = player.units
         else:
             cells = player.units
             adjacents = player.walls
-        return len(self.flat_map_set(lambda adjacent: game.preferences.get_adjacent_cells(adjacent), adjacents)
-                   .intersection(cells))
+        return GameBot.flat_map_set(lambda adjacent: game.preferences.get_adjacent_cells(adjacent), adjacents) \
+            .intersection(cells)
 
     @staticmethod
     def flat_map_list(f, collection) -> List:
@@ -148,7 +178,6 @@ class GameBot:
         for item in collection:
             ret.add(f(item))
         return ret
-
 
     def dist_to_closest_enemy(self, game: Game) -> int:
         pass
