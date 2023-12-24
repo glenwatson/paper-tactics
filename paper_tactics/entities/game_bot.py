@@ -109,7 +109,7 @@ class GameBot:
             simulated_game.preferences.hack_set_is_not_against_bot()
             simulated_game.make_turn(simulated_game.active_player.id, cell)
             # turns were just reset after .make_turn()
-            should_change_turn = simulated_game.turns_left == simulated_game.preferences.turn_count
+            should_change_turn = simulated_game.turns_left == 2  #  simulated_game.preferences.turn_count
             recursion_modifier = -1 if should_change_turn else 1
             simulated_game_value_move = self.negamax(
                 simulated_game,
@@ -133,21 +133,34 @@ class GameBot:
         if game.passive_player.is_defeated:
             return float('inf')
         points = 0
-        points += len(game.active_player.reachable)
-        points -= len(game.passive_player.reachable)
-        points += len(game.active_player.units)
-        points -= len(game.passive_player.units)
-        points += 6 * len(game.active_player.walls)
-        points -= 6 * len(game.passive_player.walls)
+        # reachable squares
+        points += 1 * len(game.active_player.reachable)
+        points -= 1 * len(game.passive_player.reachable)
+        # num of units
+        points += 2 * len(game.active_player.units)
+        points -= 2 * len(game.passive_player.units)
+        # num of walls
+        points += 8 * len(game.active_player.walls)
+        points -= 8 * len(game.passive_player.walls)
+        # todo connected walls
+        # units touch a wall
         active_units_touching_wall_count = GameBot.count_of_units_touching_wall(game, game.active_player)
         points += 1000 if active_units_touching_wall_count > 0 else 0
-        points += 10 * active_units_touching_wall_count
+        points += 16 * active_units_touching_wall_count
         passive_units_touching_wall_count = GameBot.count_of_units_touching_wall(game, game.passive_player)
         points -= 1000 if passive_units_touching_wall_count > 0 else 0
-        points -= 10 * active_units_touching_wall_count
+        points -= 16 * active_units_touching_wall_count
+        # dist from friendly wall
+        # todo: kind of the same as active_units_touching_wall_count
+        active_dist_to_friendly_walls = GameBot.dist_to_walls(game, game.active_player)
+        points -= 20 * (active_dist_to_friendly_walls - 2) if active_dist_to_friendly_walls is not None else 0
+        passive_dist_to_friendly_walls = GameBot.dist_to_walls(game, game.passive_player)
+        points += 20 * (passive_dist_to_friendly_walls - 2) if passive_dist_to_friendly_walls is not None else 0
         # todo
+        #  dist from friendly wall
         #  if you can run far away enough to not allow your opponent to remove units from adjacent walls, +10
         #  length of wall, +2 * length
+        #  keep opponent.units away from your units, keep opponent.units close to your walls, and vice-versa
         return points
 
     @staticmethod
@@ -179,10 +192,29 @@ class GameBot:
             ret.add(f(item))
         return ret
 
-    def dist_to_closest_enemy(self, game: Game) -> int:
-        pass
+    @staticmethod
+    def dist_to_walls(game: Game, player: Player) -> float:
+        path_to_walls = GameBot.a_star_algorithm(
+            game,
+            game.active_player if player == game.active_player else game.passive_player,
+            game.active_player if player != game.active_player else game.passive_player,
+            player.units,
+            player.walls)
+        if path_to_walls is None:
+            return None
+        return len(path_to_walls)
 
-    def a_star_algorithm(self, game: Game, start_cells: [Cell], goal: Cell):  # -> [Cell] | None
+    @staticmethod
+    def dist_to_closest_enemy(game: Game) -> int:
+        return len(GameBot.a_star_algorithm(
+            game,
+            game.active_player,
+            game.passive_player,
+            game.active_player.units,
+            game.passive_player.units.union(game.passive_player.walls)))
+
+    @staticmethod
+    def a_star_algorithm(game: Game, player: Player, opponent: Player, start_cells: [Cell], goals: [Cell]):  # -> [Cell] | None
         # TODO make goal a list of Cells
         # Initially, only the start cell is known.
         open_set = []
@@ -192,9 +224,9 @@ class GameBot:
         # h_score[c] represents our current best guess as to how cheap a path could be from start to finish if it goes through c.
         h_score = defaultdict(lambda: float('inf'))
         for start_cell in start_cells:
-            open_set = [(0, start_cell)]
+            open_set.append((0, start_cell))
             cheapest_score[start_cell] = 0
-            h_score[start_cell] = self._heuristic(start_cell, goal)
+            h_score[start_cell] = GameBot._heuristic(start_cell, goals)
         heapq.heapify(open_set)
 
         # For cell c, cameFrom[c] is the cell immediately preceding it on the cheapest path from the start
@@ -205,18 +237,18 @@ class GameBot:
             # This operation occurs in O(Log(N)) time since open_set is a min-heap
             cost_cell = heapq.heappop(open_set)
             current = cost_cell[1]
-            if current == goal:
-                return self._reconstruct_path(cameFrom, current)
+            if current in goals:
+                # todo: optimization - don't have to reconstruct the path if we only want the cost
+                return GameBot._reconstruct_path(cameFrom, current)
 
-            for cost_neighbor in self._get_friendly_neighbors(game, current):
-                neighbor = cost_neighbor[1]
+            for cost, neighbor in GameBot._get_friendly_neighbors(game, player, opponent, current):
                 # tentative_cheapest_score is the distance from start to the neighbor through current
-                tentative_cheapest_score = cheapest_score[current] + cost_neighbor[0]
+                tentative_cheapest_score = cheapest_score[current] + cost
                 if tentative_cheapest_score < cheapest_score[neighbor]:
                     # This path to neighbor is better than any previous one. Record it!
                     cameFrom[neighbor] = current
                     cheapest_score[neighbor] = tentative_cheapest_score
-                    h_score[neighbor] = tentative_cheapest_score + self._heuristic(neighbor, goal)
+                    h_score[neighbor] = tentative_cheapest_score + GameBot._heuristic(neighbor, goals)
                     if neighbor not in open_set:
                         heapq.heappush(open_set, (tentative_cheapest_score, neighbor))
 
@@ -224,7 +256,12 @@ class GameBot:
         return None
 
     @staticmethod
-    def _heuristic(start: Cell, goal: Cell) -> float:
+    def _heuristic(start: Cell, goals: [Cell]) -> float:
+        return 0  # todo
+        # return GameBot._heuristic_single(start, goal)
+
+    @staticmethod
+    def _heuristic_single(start: Cell, goal: Cell) -> float:
         """
         https://en.wikipedia.org/wiki/Chebyshev_distance
         This is NOT admissible due to friendly walls being present which could shorten the
@@ -245,18 +282,18 @@ class GameBot:
         return total_path
 
     @staticmethod
-    def _get_friendly_neighbors(game: Game, cell: Cell) -> [(Cell, int)]:
+    def _get_friendly_neighbors(game: Game, player: Player, opponent: Player, cell: Cell) -> [(Cell, int)]:
         """
         :return: a list of friendly neighbors and their cost of getting there
         """
         # Start with exploring in each of the 8 directions
         neighbors = []
         for candidate in game.preferences.get_adjacent_cells(cell):
-            if candidate in game.active_player.walls:  # check for friendly walls
+            if candidate in player.walls:  # check for friendly walls
                 neighbors.append((0, candidate))
-            elif candidate in game.passive_player.walls:  # check for opponent walls
+            elif candidate in opponent.walls:  # check for opponent walls
                 pass  # skip
-            elif candidate in game.passive_player.units:  # check for opponent units
+            elif candidate in opponent.units:  # check for opponent units
                 pass  # skip
             else:  # empty cell or untaken trench
                 neighbors.append((1, candidate))
