@@ -175,6 +175,52 @@ class Game:
                     yield x + 1, y + 1
                     yield size - x, size - y
 
+    def __str__(self) -> str:
+        return self._str_wide()
+
+    def _str_wide(self) -> str:
+        ret = ''
+        board_size = self.preferences.size
+        for y in range(board_size):
+            for x in range(board_size):
+                ret += "+-"
+            ret += "+\n"
+            for x in range(board_size):
+                current_cell = (x+1, y+1)
+                ret += "|" + self._get_char(current_cell)
+            ret += "|\n"
+        for x in range(board_size):
+            ret += "+-"
+        ret += "+\n"
+        return ret
+
+    def _str_compact(self) -> str:
+        ret = ''
+        board_size = self.preferences.size
+        for y in range(board_size):
+            ret += "\n"
+            for x in range(board_size):
+                current_cell = (x+1, y+1)
+                ret += self._get_char(current_cell)
+            ret += "\n"
+        ret += "\n"
+        return ret
+
+    def _get_char(self, cell: Cell) -> str:
+        if cell in self.active_player.units:
+            return "X"
+        elif cell in self.active_player.walls:
+            return "#"
+        elif cell in self.passive_player.units:
+            return "0"
+        elif cell in self.passive_player.walls:
+            return "8"
+        elif cell in self.trenches:
+            # is unclaimed trench
+            return "@"
+        else:
+            return " "
+
 
 class IllegalTurnException(Exception):
     pass
