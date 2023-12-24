@@ -1,16 +1,15 @@
-import asyncio
 import json
 import random
 import time
 
-from paper_tactics.adapters.stdout_logger import StdoutLogger
+from websockets.sync.client import connect
+
 from paper_tactics.entities.game import Game
 from paper_tactics.entities.game_bot import GameBot
 from paper_tactics.entities.game_preferences import GamePreferences
 from paper_tactics.entities.game_view import GameView
 from paper_tactics.entities.player import Player
 from paper_tactics.entities.player_view import PlayerView
-from websockets.sync.client import connect
 
 
 def start_websocket_bot():
@@ -70,6 +69,9 @@ def start_websocket_bot():
                     for unused in range(len(moves)-1):
                         websocket.recv()
                         time.sleep(1)
+            print('waiting a bit before the next game...')
+            # wait a few seconds before the next game (to allow players to claim the "first player" spot
+            time.sleep(5 + (random.random() * 10))  # 5-15 seconds
 
 
 def game_view_to_game(game_view: GameView) -> Game:
