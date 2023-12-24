@@ -1,5 +1,6 @@
 import asyncio
 import json
+import random
 import time
 
 from paper_tactics.adapters.stdout_logger import StdoutLogger
@@ -9,63 +10,70 @@ from paper_tactics.entities.game_preferences import GamePreferences
 from paper_tactics.entities.game_view import GameView
 from paper_tactics.entities.player import Player
 from paper_tactics.entities.player_view import PlayerView
-
-logger = StdoutLogger()
-
-
-
 from websockets.sync.client import connect
 
 
-def hello():
+def start_websocket_bot():
     bot = GameBot()
-    print('connecting to websocket...')
-    with connect("wss://az7ndrlaxk.execute-api.eu-central-1.amazonaws.com/rolling") as websocket:
-        print('connected!')
-        print('requesting game...')
-        websocket.send('''{
-            "action": "create-game",
-            "view_data": {
-              "iconIndex": "0",
-              "timeZone": "America/New_York",
-              "os": "Linux"
-            },
-            "preferences": {
-              "size": 10,
-              "turn_count": 3,
-              "is_visibility_applied": false,
-              "is_against_bot": false,
-              "trench_density_percent": 0,
-              "is_double_base": false,
-              "code": ""
-            }
-        }''')
-        while True:
-            message = websocket.recv()
-            print(f"Received: {message}")
-            event = json.loads(message)
-            if event['my_turn']:
-                game_view = parse_game_view(event)
-                game = game_view_to_game(game_view)
-                print('thinking...')
-                moves = bot.make_turn(game)
-                print('done!')
-                for x, y in moves:
-                    print('sending move ' + str(x) + ', ' + str(y))
-                    websocket.send(json.dumps({
-                        "action": "make-turn",
-                        "gameId": game.id,
-                        "cell": [
-                            x,
-                            y
-                        ]
-                    }))
-                    time.sleep(1)
-
+    while True:  # play games forever
+        print('connecting to websocket...')
+        with connect("wss://az7ndrlaxk.execute-api.eu-central-1.amazonaws.com/rolling") as websocket:
+            print('connected!')
+            print('requesting game...')
+            websocket.send('''{
+                "action": "create-game",
+                "view_data": {
+                  "iconIndex": "0",
+                  "timeZone": "America/New_York",
+                  "os": "Linux"
+                },
+                "preferences": {
+                  "size": 10,
+                  "turn_count": 3,
+                  "is_visibility_applied": false,
+                  "is_against_bot": false,
+                  "trench_density_percent": 0,
+                  "is_double_base": false,
+                  "code": ""
+                }
+            }''')
+            while True:
+                message = websocket.recv()
+                print(f"Received: {message}")
+                event = json.loads(message)
+                if event['me']['is_defeated'] or event['me']['is_gone']:
+                    print('I lose!')
+                    break  # stop playing this game
+                if event['opponent']['is_defeated'] or event['opponent']['is_gone']:
+                    print('I win!')
+                    break  # stop playing this game
+                if event['my_turn']:
+                    print('my turn!')
+                    game_view = parse_game_view(event)
+                    game = game_view_to_game(game_view)
+                    print('thinking...')
+                    moves = bot.make_turn(game)
+                    print('done thinking! Decided on moves ' + str(moves))
+                    for x, y in moves:
+                        print('sending move ' + str(x) + ', ' + str(y))
+                        websocket.send(json.dumps({
+                            "action": "make-turn",
+                            "gameId": game.id,
+                            "cell": [
+                                x,
+                                y
+                            ]
+                        }))
+                        time.sleep(0.5 + (random.random() * 1))  # 0.5-1.5 seconds
+                    # Can't send multiple moves without the server queuing up multiple messages
+                    # Have to swallow the "game updated" messages from each move we send (except for the last message)
+                    for unused in range(len(moves)-1):
+                        websocket.recv()
+                        time.sleep(1)
 
 
 def game_view_to_game(game_view: GameView) -> Game:
-    return Game(
+    game = Game(
         id=game_view.id,
         preferences=game_view.preferences,
         turns_left=game_view.turns_left,
@@ -74,7 +82,7 @@ def game_view_to_game(game_view: GameView) -> Game:
             units=set(game_view.me.units),
             walls=set(game_view.me.walls),
             reachable=set(game_view.me.reachable),
-            visible_opponent=set(),  # todo
+            visible_opponent=set(game_view.opponent.units.union(game_view.opponent.walls)),
             visible_terrain=set(),  # todo
             view_data=dict(),  # todo
             is_gone=game_view.me.is_gone,
@@ -86,7 +94,7 @@ def game_view_to_game(game_view: GameView) -> Game:
             units=set(game_view.opponent.units),
             walls=set(game_view.opponent.walls),
             reachable=set(game_view.opponent.reachable),
-            visible_opponent=set(),  # todo
+            visible_opponent=set(game_view.me.units.union(game_view.me.walls)),
             visible_terrain=set(),  # todo
             view_data=dict(),  # todo
             is_gone=game_view.opponent.is_gone,
@@ -95,6 +103,9 @@ def game_view_to_game(game_view: GameView) -> Game:
         ),
         trenches=game_view.trenches
     )
+    # For some reason, the opponent's reachable set is always empty in the GameView
+    game._rebuild_reachable_set(game.passive_player, game.active_player)
+    return game
 
 
 def parse_game_view(event: dict) -> GameView:
@@ -132,4 +143,5 @@ def parse_game_view(event: dict) -> GameView:
 
 
 if __name__ == "__main__":
-    hello()
+    random.seed(10000)
+    start_websocket_bot()
