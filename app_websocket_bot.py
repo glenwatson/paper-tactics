@@ -3,6 +3,7 @@ import random
 import time
 
 from websockets.sync.client import connect
+from websockets.exceptions import ConnectionClosedOK
 
 from paper_tactics.entities.game import Game
 from paper_tactics.entities.game_bot import GameBot
@@ -16,62 +17,67 @@ def start_websocket_bot():
     bot = GameBot()
     while True:  # play games forever
         print('connecting to websocket...')
-        with connect("wss://az7ndrlaxk.execute-api.eu-central-1.amazonaws.com/rolling") as websocket:
-            print('connected!')
-            print('requesting game...')
-            websocket.send('''{
-                "action": "create-game",
-                "view_data": {
-                  "iconIndex": "0",
-                  "timeZone": "America/New_York",
-                  "os": "Linux"
-                },
-                "preferences": {
-                  "size": 10,
-                  "turn_count": 3,
-                  "is_visibility_applied": false,
-                  "is_against_bot": false,
-                  "trench_density_percent": 0,
-                  "is_double_base": false,
-                  "code": ""
-                }
-            }''')
-            while True:
-                message = websocket.recv()
-                print(f"Received: {message}")
-                event = json.loads(message)
-                if event['me']['is_defeated'] or event['me']['is_gone']:
-                    print('I lose!')
-                    break  # stop playing this game
-                if event['opponent']['is_defeated'] or event['opponent']['is_gone']:
-                    print('I win!')
-                    break  # stop playing this game
-                if event['my_turn']:
-                    print('my turn!')
-                    game_view = parse_game_view(event)
-                    game = game_view_to_game(game_view)
-                    print('thinking...')
-                    moves = bot.make_turn(game)
-                    print('done thinking! Decided on moves ' + str(moves))
-                    for x, y in moves:
-                        print('sending move ' + str(x) + ', ' + str(y))
-                        websocket.send(json.dumps({
-                            "action": "make-turn",
-                            "gameId": game.id,
-                            "cell": [
-                                x,
-                                y
-                            ]
-                        }))
-                        time.sleep(0.5 + (random.random() * 1))  # 0.5-1.5 seconds
-                    # Can't send multiple moves without the server queuing up multiple messages
-                    # Have to swallow the "game updated" messages from each move we send (except for the last message)
-                    for unused in range(len(moves)-1):
-                        websocket.recv()
-                        time.sleep(1)
-            print('waiting a bit before the next game...')
-            # wait a few seconds before the next game (to allow players to claim the "first player" spot
-            time.sleep(5 + (random.random() * 10))  # 5-15 seconds
+        try:
+            with connect("wss://az7ndrlaxk.execute-api.eu-central-1.amazonaws.com/rolling") as websocket:
+                print('connected!')
+                print('requesting game...')
+                websocket.send('''{
+                    "action": "create-game",
+                    "view_data": {
+                      "iconIndex": "0",
+                      "timeZone": "America/New_York",
+                      "os": "Linux"
+                    },
+                    "preferences": {
+                      "size": 10,
+                      "turn_count": 3,
+                      "is_visibility_applied": false,
+                      "is_against_bot": false,
+                      "trench_density_percent": 0,
+                      "is_double_base": false,
+                      "code": ""
+                    }
+                }''')
+                while True:
+                    message = websocket.recv()
+                    #print(f"Received: {message}")
+                    event = json.loads(message)
+                    if event['me']['is_defeated'] or event['me']['is_gone']:
+                        print('I lose!')
+                        break  # stop playing this game
+                    if event['opponent']['is_defeated'] or event['opponent']['is_gone']:
+                        print('I win!')
+                        break  # stop playing this game
+                    if event['my_turn']:
+                        print('my turn!')
+                        game_view = parse_game_view(event)
+                        game = game_view_to_game(game_view)
+                        print('thinking...')
+                        moves = bot.make_turn(game)
+                        print('done thinking! Decided on moves ' + str(moves))
+                        for x, y in moves:
+                            print('sending move ' + str(x) + ', ' + str(y))
+                            websocket.send(json.dumps({
+                                "action": "make-turn",
+                                "gameId": game.id,
+                                "cell": [
+                                    x,
+                                    y
+                                ]
+                            }))
+                            time.sleep(0.5 + (random.random() * 1))  # 0.5-1.5 seconds
+                        # Can't send multiple moves without the server queuing up multiple messages
+                        # Have to swallow the "game updated" messages from each move we send (except for the last message)
+                        for unused in range(len(moves)-1):
+                            websocket.recv()
+                            time.sleep(1)
+                print('waiting a bit before the next game...')
+                # wait a few seconds before the next game (to allow players to claim the "first player" spot
+                time.sleep(5 + (random.random() * 10))  # 5-15 seconds
+        except ConnectionClosedOK:
+            print('!lost connection!')
+            # wait a few minutes if there aren't any other players
+            time.sleep(3 + (random.random() * 120))  # 3-5 minutes
 
 
 def game_view_to_game(game_view: GameView) -> Game:
