@@ -79,8 +79,6 @@ class GameBot:
 
     def negamax_move(self, game: Game) -> [Cell]:
         # store this many number of turns
-        turns_to_make = game.turns_left
-        moves_to_make = []
         possible_moves = game.active_player.reachable
         best_moves = []
         best_score = float('-inf')
@@ -98,29 +96,34 @@ class GameBot:
         return random.choice(best_moves)
 
     def negamax(self, game: Game, depth: int, alpha: float, beta: float, turn: bool) -> tuple[float, [Cell]]:
+        """
+        :return: tuple of (The expected value of the game state, the moves it took to get to that state)
+        """
         if depth == 0 or game.active_player.is_defeated or game.passive_player.is_defeated:
             return self.evaluate_game_for_active_player(game), []
         possible_moves = game.active_player.reachable
-        # possible_moves = sort(possible_moves)
+        # todo: optimization simulate all the possible moves first, order them by their evaluation function value,
+        #  and explore them in that order
+        #   possible_moves = sort(possible_moves)
         value = float('-inf')
         value_move = []
+        # turns were just reset after .make_turn()
+        should_change_turn = game.turns_left == game.preferences.turn_count
+        recursion_modifier = -1 if should_change_turn else 1
         for cell in possible_moves:
             simulated_game = copy.deepcopy(game)
             simulated_game.preferences.hack_set_is_not_against_bot()
             simulated_game.make_turn(simulated_game.active_player.id, cell)
-            # turns were just reset after .make_turn()
-            should_change_turn = simulated_game.turns_left == 2  #  simulated_game.preferences.turn_count
-            recursion_modifier = -1 if should_change_turn else 1
-            simulated_game_value_move = self.negamax(
+            best_simulated_game_value, best_simulated_game_moves = self.negamax(
                 simulated_game,
                 depth - 1,
                 beta * recursion_modifier,
                 alpha * recursion_modifier,
                 not turn if should_change_turn else turn)
-            simulated_game_value = simulated_game_value_move[0] * recursion_modifier
-            if value < simulated_game_value:
-                value = simulated_game_value
-                value_move = [cell] + simulated_game_value_move[1]
+            best_simulated_game_value = best_simulated_game_value * recursion_modifier
+            if value < best_simulated_game_value:
+                value = best_simulated_game_value
+                value_move = [cell] + best_simulated_game_moves
             alpha = max(alpha, value)
             if alpha >= beta:
                 break
@@ -137,6 +140,7 @@ class GameBot:
         points += 1 * len(game.active_player.reachable)
         points -= 1 * len(game.passive_player.reachable)
         # num of units
+        # todo: prioritize killing enemy units close to my units
         points += 2 * len(game.active_player.units)
         points -= 2 * len(game.passive_player.units)
         # num of walls
@@ -179,17 +183,11 @@ class GameBot:
             .intersection(cells)
 
     @staticmethod
-    def flat_map_list(f, collection) -> List:
-        ret = []
-        for item in collection:
-            ret.extend(f(item))
-        return ret
-
-    @staticmethod
     def flat_map_set(f, collection) -> set:
         ret = set()
         for item in collection:
-            ret.add(f(item))
+            for f_ret in f(item):
+                ret.add(f_ret)
         return ret
 
     @staticmethod
