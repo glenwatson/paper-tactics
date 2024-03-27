@@ -52,6 +52,7 @@ def start_websocket_bot():
                         print('my turn!')
                         game_view = parse_game_view(event)
                         game = game_view_to_game(game_view)
+                        print(game)
                         print('thinking...')
                         moves = bot.make_turn(game)
                         print('done thinking! Decided on moves ' + str(moves))

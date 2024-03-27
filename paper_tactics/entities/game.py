@@ -208,13 +208,13 @@ class Game:
 
     def _get_char(self, cell: Cell) -> str:
         if cell in self.active_player.units:
-            return "X"
+            return "x"
         elif cell in self.active_player.walls:
-            return "#"
+            return "X"
         elif cell in self.passive_player.units:
-            return "0"
+            return "o"
         elif cell in self.passive_player.walls:
-            return "8"
+            return "0"
         elif cell in self.trenches:
             # is unclaimed trench
             return "@"

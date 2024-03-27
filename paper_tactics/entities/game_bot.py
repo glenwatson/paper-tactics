@@ -156,14 +156,24 @@ class GameBot:
         # dist from friendly wall
         # todo: kind of the same as active_units_touching_wall_count
         active_dist_to_friendly_walls = GameBot.dist_to_walls(game, game.active_player)
-        points -= 20 * (active_dist_to_friendly_walls - 2) if active_dist_to_friendly_walls is not None else 0
+        points -= 32 * (active_dist_to_friendly_walls - 2) if active_dist_to_friendly_walls is not None else 0
         passive_dist_to_friendly_walls = GameBot.dist_to_walls(game, game.passive_player)
-        points += 20 * (passive_dist_to_friendly_walls - 2) if passive_dist_to_friendly_walls is not None else 0
+        points += 32 * (passive_dist_to_friendly_walls - 2) if passive_dist_to_friendly_walls is not None else 0
         # todo
-        #  dist from friendly wall
         #  if you can run far away enough to not allow your opponent to remove units from adjacent walls, +10
         #  length of wall, +2 * length
-        #  keep opponent.units away from your units, keep opponent.units close to your walls, and vice-versa
+        #  keep opponent.units away from your units
+        #  keep opponent.units close to your walls, and vice-versa
+        # dist_of_opponents_units_from_my_walls = GameBot.a_star_algorithm(game, game.active_player,
+        #                                                                  game.passive_player,
+        #                                                                  game.active_player.walls,
+        #                                                                  game.passive_player.units)
+        # points -= 16 * (len(dist_of_opponents_units_from_my_walls) - 2) if dist_of_opponents_units_from_my_walls is not None else 0
+        # dist_of_my_units_from_opponents_walls = GameBot.a_star_algorithm(game, game.passive_player,
+        #                                                                  game.active_player,
+        #                                                                  game.active_player.units,
+        #                                                                  game.passive_player.walls)
+        # points += 32 * (len(dist_of_my_units_from_opponents_walls) - 2) if dist_of_my_units_from_opponents_walls is not None else 0
         return points
 
     @staticmethod
