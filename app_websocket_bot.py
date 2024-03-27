@@ -3,7 +3,7 @@ import random
 import time
 
 from websockets.sync.client import connect
-from websockets.exceptions import ConnectionClosedOK
+from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
 
 from paper_tactics.entities.game import Game
 from paper_tactics.entities.game_bot import GameBot
@@ -24,7 +24,7 @@ def start_websocket_bot():
                 websocket.send('''{
                     "action": "create-game",
                     "view_data": {
-                      "iconIndex": "0",
+                      "iconIndex": "'''+str(random.randrange(30))+'''",
                       "timeZone": "America/New_York",
                       "os": "Linux"
                     },
@@ -65,7 +65,7 @@ def start_websocket_bot():
                                     y
                                 ]
                             }))
-                            time.sleep(0.5 + (random.random() * 1))  # 0.5-1.5 seconds
+                            time.sleep(0.5 + (random.random() * 2))  # 0.5-2.5 seconds
                         # Can't send multiple moves without the server queuing up multiple messages
                         # Have to swallow the "game updated" messages from each move we send (except for the last message)
                         for unused in range(len(moves)-1):
@@ -73,11 +73,11 @@ def start_websocket_bot():
                             time.sleep(1)
                 print('waiting a bit before the next game...')
                 # wait a few seconds before the next game (to allow players to claim the "first player" spot
-                time.sleep(5 + (random.random() * 10))  # 5-15 seconds
-        except ConnectionClosedOK:
+                time.sleep(30 + (random.random() * 30))  # 30-60 seconds
+        except ConnectionClosedOK or ConnectionClosedError or TimeoutError:
             print('!lost connection!')
             # wait a few minutes if there aren't any other players
-            time.sleep(3 + (random.random() * 120))  # 3-5 minutes
+            time.sleep(180 + (random.random() * 120))  # 3-5 minutes
 
 
 def game_view_to_game(game_view: GameView) -> Game:

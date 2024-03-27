@@ -5,6 +5,7 @@ from random import choices
 import heapq
 from collections import defaultdict
 from typing import List
+from typing import Union
 
 from paper_tactics.entities.cell import Cell
 from paper_tactics.entities.game import Game
@@ -78,7 +79,7 @@ class GameBot:
         return (discoverable_count + 1) * self.discoverable_weight
 
     def negamax_move(self, game: Game) -> [Cell]:
-        # store this many number of turns
+        game.hack_set_player_ids()
         possible_moves = game.active_player.reachable
         best_moves = []
         best_score = float('-inf')
@@ -86,7 +87,7 @@ class GameBot:
             simulated_game = copy.deepcopy(game)
             simulated_game.preferences.hack_set_is_not_against_bot()
             simulated_game.make_turn(simulated_game.active_player.id, cell)
-            score, moves = self.negamax(simulated_game, 3, float('-inf'), float('inf'), False)
+            score, moves = self.negamax(simulated_game, 3, float('-inf'), float('inf'), game.active_player.id)
             if score > best_score:
                 best_score = score
                 best_moves = [[cell] + moves]
@@ -95,7 +96,7 @@ class GameBot:
         print('found best moves ' + str(best_moves) + ' with score of ' + str(best_score))
         return random.choice(best_moves)
 
-    def negamax(self, game: Game, depth: int, alpha: float, beta: float, turn: bool) -> tuple[float, [Cell]]:
+    def negamax(self, game: Game, depth: int, alpha: float, beta: float, maximizing_player_id: str) -> tuple[float, [Cell]]:
         """
         :return: tuple of (The expected value of the game state, the moves it took to get to that state)
         """
@@ -107,19 +108,17 @@ class GameBot:
         #   possible_moves = sort(possible_moves)
         value = float('-inf')
         value_move = []
-        # turns were just reset after .make_turn()
-        should_change_turn = game.turns_left == game.preferences.turn_count
-        recursion_modifier = -1 if should_change_turn else 1
         for cell in possible_moves:
             simulated_game = copy.deepcopy(game)
             simulated_game.preferences.hack_set_is_not_against_bot()
+            recursion_modifier = -1 if simulated_game.active_player.id == maximizing_player_id else 1
             simulated_game.make_turn(simulated_game.active_player.id, cell)
             best_simulated_game_value, best_simulated_game_moves = self.negamax(
                 simulated_game,
                 depth - 1,
                 beta * recursion_modifier,
                 alpha * recursion_modifier,
-                not turn if should_change_turn else turn)
+                maximizing_player_id)
             best_simulated_game_value = best_simulated_game_value * recursion_modifier
             if value < best_simulated_game_value:
                 value = best_simulated_game_value
@@ -212,7 +211,7 @@ class GameBot:
             game.passive_player.units.union(game.passive_player.walls)))
 
     @staticmethod
-    def a_star_algorithm(game: Game, player: Player, opponent: Player, start_cells: [Cell], goals: [Cell]):  # -> [Cell] | None
+    def a_star_algorithm(game: Game, player: Player, opponent: Player, start_cells: [Cell], goals: [Cell]) -> Union[List[Cell], None]:
         # TODO make goal a list of Cells
         # Initially, only the start cell is known.
         open_set = []

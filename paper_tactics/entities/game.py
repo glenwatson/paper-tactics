@@ -221,6 +221,10 @@ class Game:
         else:
             return " "
 
+    def hack_set_player_ids(self):
+        self.active_player.id = "1"
+        self.passive_player.id = "2"
+
 
 class IllegalTurnException(Exception):
     pass
